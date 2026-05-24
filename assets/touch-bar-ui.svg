@@ -79,10 +79,10 @@
       <rect x="507" y="-1" width="28" height="23" rx="8" fill="#3F4543" stroke="#59605D" stroke-width="3" transform="rotate(-1.1 521 12)"/>
     </g>
 
-    <text x="1166" y="335" class="hand" fill="#F9F7EF" font-size="29" font-weight="700" text-anchor="end">10%</text>
-    <text x="1166" y="399" class="hand" fill="#F9F7EF" font-size="29" font-weight="700" text-anchor="end">86%</text>
-    <text x="1312" y="335" class="hand" fill="#C9D0CA" font-size="23" font-weight="700" text-anchor="end">resets 03:17</text>
-    <text x="1312" y="399" class="hand" fill="#C9D0CA" font-size="23" font-weight="700" text-anchor="end">resets 5/27</text>
+    <text x="1173" y="335" class="hand" fill="#F9F7EF" font-size="29" font-weight="700" text-anchor="end">10%</text>
+    <text x="1173" y="399" class="hand" fill="#F9F7EF" font-size="29" font-weight="700" text-anchor="end">86%</text>
+    <text x="1312" y="335" class="hand" fill="#C9D0CA" font-size="20" font-weight="700" text-anchor="end">23:17 4h 59m</text>
+    <text x="1312" y="399" class="hand" fill="#C9D0CA" font-size="20" font-weight="700" text-anchor="end">5/31 6d 18h</text>
   </g>
 
   <g filter="url(#sketch)">

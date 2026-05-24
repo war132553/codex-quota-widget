@@ -18,7 +18,7 @@ Chinese UI preview:
 Codex Quota Widget shows your Codex 5-hour quota and weekly quota in a floating desktop capsule. If your Mac has a Touch Bar, it can also mirror the same quota as a segmented bar.
 
 - Main display: a floating desktop capsule that stays visible while Codex is running.
-- Optional display: a Touch Bar view with segmented quota bars, remaining percentages, and reset times.
+- Optional display: a Touch Bar view with segmented quota bars, remaining percentages, reset times, and countdowns.
 
 It is built for people who use Codex heavily and want the same kind of ambient awareness as a download speed widget or battery meter: glance once, keep working.
 

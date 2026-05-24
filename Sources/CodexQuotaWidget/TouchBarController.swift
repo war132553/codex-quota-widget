@@ -227,7 +227,7 @@ private final class TouchBarQuotaRow: NSView {
             barView.widthAnchor.constraint(equalToConstant: 210),
             barView.heightAnchor.constraint(equalToConstant: 8),
             percentLabel.widthAnchor.constraint(equalToConstant: 46),
-            resetLabel.widthAnchor.constraint(equalToConstant: 92),
+            resetLabel.widthAnchor.constraint(equalToConstant: 98),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: trailingAnchor),
             stack.topAnchor.constraint(equalTo: topAnchor),
@@ -294,33 +294,41 @@ private enum TouchBarQuotaFormatter {
         return formatter
     }()
 
-    static func resetText(_ date: Date?, style: ResetStyle, language: WidgetLanguage) -> String {
+    static func resetText(_ date: Date?, style: ResetStyle, language _: WidgetLanguage) -> String {
         guard let date else {
-            switch language {
-            case .english:
-                return "resets --"
-            case .chinese:
-                return "-- 重置"
-            }
+            return "-- --"
         }
 
         switch style {
         case .time:
             let time = timeFormatter.string(from: date)
-            switch language {
-            case .english:
-                return "resets \(time)"
-            case .chinese:
-                return "\(time) 重置"
-            }
+            return "\(time) \(countdownText(until: date, style: .time))"
         case .date:
             let dateText = dateFormatter.string(from: date)
-            switch language {
-            case .english:
-                return "resets \(dateText)"
-            case .chinese:
-                return "\(dateText) 重置"
+            return "\(dateText) \(countdownText(until: date, style: .date))"
+        }
+    }
+
+    private static func countdownText(until date: Date, style: ResetStyle) -> String {
+        let remainingSeconds = max(0, Int(date.timeIntervalSinceNow))
+        let days = remainingSeconds / 86_400
+        let hours = (remainingSeconds % 86_400) / 3_600
+        let minutes = (remainingSeconds % 3_600) / 60
+
+        switch style {
+        case .time:
+            if hours > 0 {
+                return "\(hours)h \(minutes)m"
             }
+            return "\(max(minutes, 0))m"
+        case .date:
+            if days > 0 {
+                return "\(days)d \(hours)h"
+            }
+            if hours > 0 {
+                return "\(hours)h \(minutes)m"
+            }
+            return "\(max(minutes, 0))m"
         }
     }
 }
