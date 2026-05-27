@@ -4,6 +4,7 @@ final class WidgetWindowController: NSObject, NSWindowDelegate {
     let window: NSPanel
     var onRequestRefresh: (() -> Void)?
     var onShowTouchBar: (() -> Void)?
+    var onOpenTouchBarSettings: (() -> Void)?
     var onToggleLanguage: (() -> WidgetLanguage)?
     var currentLanguage: (() -> WidgetLanguage)?
 
@@ -82,6 +83,9 @@ final class WidgetWindowController: NSObject, NSWindowDelegate {
         contentView.onShowTouchBar = { [weak self] in
             self?.onShowTouchBar?()
         }
+        contentView.onOpenTouchBarSettings = { [weak self] in
+            self?.onOpenTouchBarSettings?()
+        }
         contentView.onToggleLanguage = { [weak self] in
             self?.onToggleLanguage?() ?? .english
         }
@@ -158,6 +162,7 @@ private final class WidgetContentView: NSView {
     var onToggleExpanded: (() -> Void)?
     var onRequestRefresh: (() -> Void)?
     var onShowTouchBar: (() -> Void)?
+    var onOpenTouchBarSettings: (() -> Void)?
     var onToggleLanguage: (() -> WidgetLanguage)?
     var currentLanguage: (() -> WidgetLanguage)?
     private var mouseDownWindowOrigin: NSPoint?
@@ -367,6 +372,14 @@ private final class WidgetContentView: NSView {
         )
         touchBarItem.target = self
         menu.addItem(touchBarItem)
+
+        let touchBarSettingsItem = NSMenuItem(
+            title: "打开 Touch Bar 设置...",
+            action: #selector(handleContextOpenTouchBarSettings),
+            keyEquivalent: ""
+        )
+        touchBarSettingsItem.target = self
+        menu.addItem(touchBarSettingsItem)
         menu.addItem(.separator())
 
         let languageItem = NSMenuItem(
@@ -393,6 +406,11 @@ private final class WidgetContentView: NSView {
     @objc
     private func handleContextShowTouchBar() {
         onShowTouchBar?()
+    }
+
+    @objc
+    private func handleContextOpenTouchBarSettings() {
+        onOpenTouchBarSettings?()
     }
 
     @objc

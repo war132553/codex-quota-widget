@@ -27,6 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowController.onShowTouchBar = { [weak self] in
             self?.touchBarController.showAgain()
         }
+        windowController.onOpenTouchBarSettings = { [weak self] in
+            self?.openTouchBarSettings()
+        }
         windowController.currentLanguage = { [weak self] in
             self?.language ?? .english
         }
@@ -147,6 +150,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         touchBarController.setLanguage(language)
         touchBarController.showAgain()
         return language
+    }
+
+    private func openTouchBarSettings() {
+        let settingsURLs = [
+            "x-apple.systempreferences:com.apple.Keyboard-Settings.extension",
+            "x-apple.systempreferences:com.apple.preference.keyboard",
+        ]
+
+        for rawURL in settingsURLs {
+            guard let url = URL(string: rawURL) else { continue }
+            if NSWorkspace.shared.open(url) {
+                return
+            }
+        }
     }
 
     private func refreshSnapshot(forceReload: Bool) {
