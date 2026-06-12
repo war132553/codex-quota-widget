@@ -12,7 +12,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "CodexQuotaWidget",
-            path: "Sources/CodexQuotaWidget"
+            path: "Sources/CodexQuotaWidget",
+            swiftSettings: [
+                .swiftLanguageMode(.v5),
+            ]
         ),
     ]
 )

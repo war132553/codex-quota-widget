@@ -2,9 +2,12 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let codexBundleIdentifier = "com.openai.codex"
+    private let claudeDesktopBundleIdentifier = "com.anthropic.claudefordesktop"
     private let snapshotService = QuotaSnapshotService()
+    private let claudeRateLimitProvider = ClaudeRateLimitProvider()
     private let stateStore = WidgetStateStore()
     private let touchBarController = TouchBarController()
+    private let statusBarController = StatusBarController()
     private let refreshQueue = DispatchQueue(label: "com.wendy.codex-quota-widget.refresh")
 
     private lazy var windowController = WidgetWindowController(stateStore: stateStore)
@@ -14,15 +17,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var codexRunning = false
     private var fastRefreshUntil: Date?
     private var lastSnapshot: QuotaSnapshot?
+    private var lastClaudeRateLimit: ClaudeRateLimitSnapshot?
     private var refreshInFlight = false
+    private var claudeAutoRefreshEndsAt: Date?
+    private var claudeSelectedAutoRefreshDuration: TimeInterval?
+    private var claudeNextRefreshAt: Date?
+    private var claudeRefreshInFlight = false
+    private var claudeLastError: String?
+    private var claudeConsecutiveFailureCount = 0
     private var language: WidgetLanguage = .english
+    private var showFloatingWidget = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        language = stateStore.load().language ?? .english
+        let initialState = stateStore.load()
+        language = initialState.language ?? .english
+        showFloatingWidget = initialState.showFloatingWidget ?? false
         touchBarController.setLanguage(language)
         windowController.onRequestRefresh = { [weak self] in
             self?.refreshState(reason: "manual-refresh", forceSnapshotReload: true)
+        }
+        windowController.onOpenDashboard = { [weak self] in
+            self?.statusBarController.toggleDashboardPanel()
+        }
+        statusBarController.onRequestRefresh = { [weak self] in
+            self?.refreshState(reason: "status-bar-refresh", forceSnapshotReload: true, claudeRefreshMode: .manual)
+        }
+        statusBarController.onToggleFloatingWidget = { [weak self] in
+            self?.toggleFloatingWidget() ?? false
+        }
+        statusBarController.onStartClaudeAutoRefresh = { [weak self] duration in
+            self?.startClaudeAutoRefresh(duration: duration) ?? ClaudeRefreshStatus.inactive
+        }
+        statusBarController.onPauseClaudeAutoRefresh = { [weak self] in
+            self?.pauseClaudeAutoRefresh() ?? ClaudeRefreshStatus.inactive
+        }
+        statusBarController.onQuit = {
+            NSApp.terminate(nil)
         }
         windowController.onShowTouchBar = { [weak self] in
             self?.touchBarController.showAgain()
@@ -73,15 +104,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleWorkspaceEvent(_ notification: Notification, launched: Bool) {
         guard
             let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-            app.bundleIdentifier == codexBundleIdentifier
+            let bundleIdentifier = app.bundleIdentifier,
+            bundleIdentifier == codexBundleIdentifier || bundleIdentifier == claudeDesktopBundleIdentifier
         else {
             return
         }
 
-        if launched {
+        if launched, bundleIdentifier == codexBundleIdentifier {
             fastRefreshUntil = Date().addingTimeInterval(120)
         }
-        refreshState(reason: launched ? "codex-launch" : "codex-exit")
+        let appName = bundleIdentifier == codexBundleIdentifier ? "codex" : "claude"
+        refreshState(reason: "\(appName)-\(launched ? "launch" : "exit")")
     }
 
     private func scheduleRefreshTimer(cadence: RefreshCadence) {
@@ -98,7 +131,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func refreshState(reason: String, forceSnapshotReload: Bool = false) {
+    private func refreshState(
+        reason: String,
+        forceSnapshotReload: Bool = false,
+        claudeRefreshMode: ClaudeRefreshMode = .none
+    ) {
         let running = isCodexRunning()
 
         if running != codexRunning {
@@ -109,10 +146,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if !running {
-            windowController.hide()
             touchBarController.codexDidExit()
+            statusBarController.render(
+                snapshot: nil,
+                claudeRateLimit: lastClaudeRateLimit,
+                claudeRefreshStatus: currentClaudeRefreshStatus(),
+                isCodexRunning: false,
+                isFloatingWidgetShown: showFloatingWidget
+            )
             snapshotService.stop()
             lastSnapshot = nil
+            renderFloatingWidget()
+            refreshSnapshot(forceReload: forceSnapshotReload, claudeRefreshMode: resolvedClaudeRefreshMode(claudeRefreshMode))
             scheduleRefreshTimer(cadence: .hidden)
             return
         }
@@ -121,9 +166,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             touchBarController.codexDidLaunch()
         }
 
-        windowController.show(snapshot: lastSnapshot)
+        renderFloatingWidget()
         touchBarController.show(snapshot: lastSnapshot)
-        refreshSnapshot(forceReload: forceSnapshotReload)
+        statusBarController.render(
+            snapshot: lastSnapshot,
+            claudeRateLimit: lastClaudeRateLimit,
+            claudeRefreshStatus: currentClaudeRefreshStatus(),
+            isCodexRunning: true,
+            isFloatingWidgetShown: showFloatingWidget
+        )
+        refreshSnapshot(forceReload: forceSnapshotReload, claudeRefreshMode: resolvedClaudeRefreshMode(claudeRefreshMode))
         scheduleRefreshTimer(cadence: currentCadence())
 
         if reason == "refresh", let fastRefreshUntil, fastRefreshUntil < Date() {
@@ -152,6 +204,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return language
     }
 
+    private func toggleFloatingWidget() -> Bool {
+        showFloatingWidget.toggle()
+        stateStore.update { state in
+            state.showFloatingWidget = showFloatingWidget
+        }
+        renderFloatingWidget()
+        return showFloatingWidget
+    }
+
+    private func startClaudeAutoRefresh(duration: TimeInterval) -> ClaudeRefreshStatus {
+        claudeSelectedAutoRefreshDuration = duration
+        claudeAutoRefreshEndsAt = Date().addingTimeInterval(duration)
+        claudeNextRefreshAt = Date()
+        claudeLastError = nil
+        claudeConsecutiveFailureCount = 0
+        refreshState(reason: "claude-auto-start", forceSnapshotReload: false, claudeRefreshMode: .manual)
+        return currentClaudeRefreshStatus()
+    }
+
+    private func pauseClaudeAutoRefresh() -> ClaudeRefreshStatus {
+        claudeAutoRefreshEndsAt = nil
+        claudeSelectedAutoRefreshDuration = nil
+        claudeNextRefreshAt = nil
+        claudeLastError = nil
+        refreshState(reason: "claude-auto-pause")
+        return currentClaudeRefreshStatus()
+    }
+
+    private func renderFloatingWidget() {
+        if showFloatingWidget {
+            windowController.show(state: FloatingQuotaState(
+                codexSnapshot: lastSnapshot,
+                claudeSnapshot: lastClaudeRateLimit,
+                isCodexRunning: codexRunning,
+                isClaudeDesktopRunning: isClaudeDesktopRunning()
+            ))
+        } else {
+            windowController.hide()
+        }
+    }
+
     private func openTouchBarSettings() {
         let settingsURLs = [
             "x-apple.systempreferences:com.apple.Keyboard-Settings.extension",
@@ -166,27 +259,189 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func refreshSnapshot(forceReload: Bool) {
+    private func refreshSnapshot(forceReload: Bool, claudeRefreshMode: ClaudeRefreshMode) {
         if refreshInFlight {
             return
         }
 
+        let effectiveClaudeRefreshMode = allowedClaudeRefreshMode(claudeRefreshMode)
+
         refreshInFlight = true
+        if effectiveClaudeRefreshMode.shouldRequestNetwork {
+            claudeRefreshInFlight = true
+        }
+        statusBarController.render(
+            snapshot: codexRunning ? lastSnapshot : nil,
+            claudeRateLimit: lastClaudeRateLimit,
+            claudeRefreshStatus: currentClaudeRefreshStatus(),
+            isCodexRunning: codexRunning,
+            isFloatingWidgetShown: showFloatingWidget
+        )
+
         refreshQueue.async { [weak self] in
             guard let self else { return }
             let snapshot = self.snapshotService.latestSnapshot(forceReload: forceReload)
+            let claudeResult: Result<ClaudeRateLimitSnapshot?, ClaudeRateLimitError> = {
+                guard effectiveClaudeRefreshMode.shouldRequestNetwork else {
+                    return .success(self.claudeRateLimitProvider.latestSnapshot())
+                }
+                return self.claudeRateLimitProvider.refreshFromOAuthUsage().map(Optional.some)
+            }()
 
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 self.refreshInFlight = false
-                guard self.codexRunning else {
-                    return
+                self.claudeRefreshInFlight = false
+
+                let claudeRateLimit: ClaudeRateLimitSnapshot?
+                switch claudeResult {
+                case .success(let snapshot):
+                    claudeRateLimit = snapshot
+                    if effectiveClaudeRefreshMode.shouldRequestNetwork {
+                        self.recordClaudeRefreshSuccess()
+                    }
+                case .failure(let error):
+                    claudeRateLimit = self.claudeRateLimitProvider.latestSnapshot()
+                    self.recordClaudeRefreshFailure(error)
                 }
 
-                self.lastSnapshot = snapshot
-                self.windowController.show(snapshot: snapshot)
-                self.touchBarController.show(snapshot: snapshot)
+                self.lastClaudeRateLimit = claudeRateLimit ?? self.lastClaudeRateLimit
+                if self.codexRunning {
+                    self.lastSnapshot = snapshot
+                    self.touchBarController.show(snapshot: snapshot)
+                }
+                self.renderFloatingWidget()
+                self.statusBarController.render(
+                    snapshot: self.codexRunning ? snapshot : nil,
+                    claudeRateLimit: self.lastClaudeRateLimit,
+                    claudeRefreshStatus: self.currentClaudeRefreshStatus(),
+                    isCodexRunning: self.codexRunning,
+                    isFloatingWidgetShown: self.showFloatingWidget
+                )
             }
         }
     }
+
+    private func resolvedClaudeRefreshMode(_ requested: ClaudeRefreshMode) -> ClaudeRefreshMode {
+        if requested.shouldRequestNetwork {
+            return requested
+        }
+
+        guard
+            let endsAt = claudeAutoRefreshEndsAt,
+            endsAt > Date()
+        else {
+            if claudeAutoRefreshEndsAt != nil {
+                claudeAutoRefreshEndsAt = nil
+                claudeSelectedAutoRefreshDuration = nil
+                claudeNextRefreshAt = nil
+            }
+            return .none
+        }
+
+        if let nextRefreshAt = claudeNextRefreshAt, nextRefreshAt <= Date() {
+            return .automatic
+        }
+        return .none
+    }
+
+    private func allowedClaudeRefreshMode(_ requested: ClaudeRefreshMode) -> ClaudeRefreshMode {
+        guard requested.shouldRequestNetwork else {
+            return .none
+        }
+
+        guard isClaudeDesktopRunning() else {
+            claudeLastError = "Claude Desktop 未运行，已跳过请求"
+            claudeRefreshInFlight = false
+            if let endsAt = claudeAutoRefreshEndsAt, endsAt > Date() {
+                claudeNextRefreshAt = min(Date().addingTimeInterval(5 * 60), endsAt)
+            }
+            return .none
+        }
+
+        return requested
+    }
+
+    private func recordClaudeRefreshSuccess() {
+        claudeLastError = nil
+        claudeConsecutiveFailureCount = 0
+        if let endsAt = claudeAutoRefreshEndsAt, endsAt > Date() {
+            claudeNextRefreshAt = min(Date().addingTimeInterval(5 * 60), endsAt)
+        }
+    }
+
+    private func recordClaudeRefreshFailure(_ error: ClaudeRateLimitError) {
+        claudeLastError = error.description
+        claudeConsecutiveFailureCount += 1
+
+        switch error {
+        case .unauthorized:
+            claudeAutoRefreshEndsAt = nil
+            claudeSelectedAutoRefreshDuration = nil
+            claudeNextRefreshAt = nil
+        case .rateLimited:
+            if claudeConsecutiveFailureCount >= 3 {
+                claudeAutoRefreshEndsAt = nil
+                claudeSelectedAutoRefreshDuration = nil
+                claudeNextRefreshAt = nil
+            } else if let endsAt = claudeAutoRefreshEndsAt, endsAt > Date() {
+                claudeNextRefreshAt = min(Date().addingTimeInterval(30 * 60), endsAt)
+            }
+        default:
+            if claudeConsecutiveFailureCount >= 3 {
+                claudeAutoRefreshEndsAt = nil
+                claudeSelectedAutoRefreshDuration = nil
+                claudeNextRefreshAt = nil
+            } else if let endsAt = claudeAutoRefreshEndsAt, endsAt > Date() {
+                claudeNextRefreshAt = min(Date().addingTimeInterval(20 * 60), endsAt)
+            }
+        }
+    }
+
+    private func currentClaudeRefreshStatus() -> ClaudeRefreshStatus {
+        let now = Date()
+        let isEnabled = claudeAutoRefreshEndsAt.map { $0 > now } ?? false
+        return ClaudeRefreshStatus(
+            isClaudeDesktopRunning: isClaudeDesktopRunning(),
+            isAutoRefreshEnabled: isEnabled,
+            selectedAutoRefreshDuration: isEnabled ? claudeSelectedAutoRefreshDuration : nil,
+            autoRefreshEndsAt: isEnabled ? claudeAutoRefreshEndsAt : nil,
+            nextRefreshAt: isEnabled ? claudeNextRefreshAt : nil,
+            isRefreshing: claudeRefreshInFlight,
+            lastError: claudeLastError,
+            consecutiveFailureCount: claudeConsecutiveFailureCount
+        )
+    }
+
+    private func isClaudeDesktopRunning() -> Bool {
+        !NSRunningApplication.runningApplications(withBundleIdentifier: claudeDesktopBundleIdentifier).isEmpty
+    }
+}
+
+private enum ClaudeRefreshMode {
+    case none
+    case manual
+    case automatic
+
+    var shouldRequestNetwork: Bool {
+        switch self {
+        case .none:
+            return false
+        case .manual, .automatic:
+            return true
+        }
+    }
+}
+
+private extension ClaudeRefreshStatus {
+    static let inactive = ClaudeRefreshStatus(
+        isClaudeDesktopRunning: false,
+        isAutoRefreshEnabled: false,
+        selectedAutoRefreshDuration: nil,
+        autoRefreshEndsAt: nil,
+        nextRefreshAt: nil,
+        isRefreshing: false,
+        lastError: nil,
+        consecutiveFailureCount: 0
+    )
 }

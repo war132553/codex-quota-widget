@@ -16,10 +16,44 @@ struct QuotaSnapshot: Codable {
     let secondary: WindowQuota?
 }
 
+struct ClaudeRateLimitWindow: Codable {
+    let label: String
+    let usedPercent: Double?
+    let resetsAt: Date?
+}
+
+struct ClaudeRateLimitSnapshot: Codable {
+    let sourceFileName: String
+    let updatedAt: Date
+    let version: String?
+    let model: String?
+    let fiveHour: ClaudeRateLimitWindow
+    let sevenDay: ClaudeRateLimitWindow
+}
+
+struct ClaudeRefreshStatus {
+    var isClaudeDesktopRunning: Bool
+    var isAutoRefreshEnabled: Bool
+    var selectedAutoRefreshDuration: TimeInterval?
+    var autoRefreshEndsAt: Date?
+    var nextRefreshAt: Date?
+    var isRefreshing: Bool
+    var lastError: String?
+    var consecutiveFailureCount: Int
+}
+
+struct FloatingQuotaState {
+    var codexSnapshot: QuotaSnapshot?
+    var claudeSnapshot: ClaudeRateLimitSnapshot?
+    var isCodexRunning: Bool
+    var isClaudeDesktopRunning: Bool
+}
+
 struct WidgetState: Codable {
     var originX: Double?
     var originY: Double?
     var language: WidgetLanguage?
+    var showFloatingWidget: Bool?
 }
 
 enum WidgetLanguage: String, Codable {

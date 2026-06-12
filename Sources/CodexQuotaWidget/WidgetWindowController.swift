@@ -3,6 +3,7 @@ import AppKit
 final class WidgetWindowController: NSObject, NSWindowDelegate {
     let window: NSPanel
     var onRequestRefresh: (() -> Void)?
+    var onOpenDashboard: (() -> Void)?
     var onShowTouchBar: (() -> Void)?
     var onOpenTouchBarSettings: (() -> Void)?
     var onToggleLanguage: (() -> WidgetLanguage)?
@@ -10,8 +11,13 @@ final class WidgetWindowController: NSObject, NSWindowDelegate {
 
     private let stateStore: WidgetStateStore
     private let contentView = WidgetContentView()
-    private var isExpanded = false
     private var hasPlacedWindow = false
+    private var currentState = FloatingQuotaState(
+        codexSnapshot: nil,
+        claudeSnapshot: nil,
+        isCodexRunning: false,
+        isClaudeDesktopRunning: false
+    )
 
     init(stateStore: WidgetStateStore) {
         self.stateStore = stateStore
@@ -29,8 +35,8 @@ final class WidgetWindowController: NSObject, NSWindowDelegate {
         restoreInitialPlacement()
     }
 
-    func show(snapshot: QuotaSnapshot?) {
-        update(snapshot: snapshot)
+    func show(state: FloatingQuotaState) {
+        update(state: state)
         if !hasPlacedWindow {
             restoreInitialPlacement()
         }
@@ -43,18 +49,18 @@ final class WidgetWindowController: NSObject, NSWindowDelegate {
         window.orderOut(nil)
     }
 
-    func toggleExpanded() {
-        isExpanded.toggle()
+    func update(state: FloatingQuotaState) {
+        currentState = state
+        contentView.render(state: state)
         applySize()
-    }
-
-    func update(snapshot: QuotaSnapshot?) {
-        contentView.render(snapshot: snapshot)
     }
 
     func windowDidMove(_ notification: Notification) {
         let frame = window.frame
-        stateStore.save(WidgetState(originX: frame.origin.x, originY: frame.origin.y))
+        stateStore.update { state in
+            state.originX = frame.origin.x
+            state.originY = frame.origin.y
+        }
     }
 
     private func setupWindow() {
@@ -74,9 +80,7 @@ final class WidgetWindowController: NSObject, NSWindowDelegate {
 
     private func setupContent() {
         contentView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.onToggleExpanded = { [weak self] in
-            self?.toggleExpanded()
-        }
+        contentView.onOpenDashboard = { [weak self] in self?.onOpenDashboard?() }
         contentView.onRequestRefresh = { [weak self] in
             self?.onRequestRefresh?()
         }
@@ -116,11 +120,19 @@ final class WidgetWindowController: NSObject, NSWindowDelegate {
     }
 
     private var currentSize: NSSize {
-        isExpanded ? NSSize(width: 228, height: 118) : NSSize(width: 154, height: 32)
+        let productCount = visibleProductCount(in: currentState)
+        let width = 154
+        let height = productCount > 1 ? 54 : 32
+        return NSSize(width: width, height: height)
+    }
+
+    private func visibleProductCount(in state: FloatingQuotaState) -> Int {
+        let codexVisible = state.isCodexRunning || state.codexSnapshot != nil
+        let claudeVisible = state.isClaudeDesktopRunning || state.claudeSnapshot != nil
+        return max(1, (codexVisible ? 1 : 0) + (claudeVisible ? 1 : 0))
     }
 
     private func applySize() {
-        contentView.setExpanded(isExpanded)
         let newSize = currentSize
         var frame = window.frame
         let deltaHeight = newSize.height - frame.size.height
@@ -159,7 +171,7 @@ final class WidgetWindowController: NSObject, NSWindowDelegate {
 }
 
 private final class WidgetContentView: NSView {
-    var onToggleExpanded: (() -> Void)?
+    var onOpenDashboard: (() -> Void)?
     var onRequestRefresh: (() -> Void)?
     var onShowTouchBar: (() -> Void)?
     var onOpenTouchBarSettings: (() -> Void)?
@@ -169,14 +181,8 @@ private final class WidgetContentView: NSView {
     private var suppressNextMouseUp = false
 
     private let summaryStack = NSStackView()
-    private let primarySummaryView = SummaryQuotaView(title: "5h")
-    private let secondarySummaryView = SummaryQuotaView(title: "7d")
-    private let detailStack = NSStackView()
-    private let fiveHourLabel = NSTextField(labelWithString: "5h: --")
-    private let sevenDayLabel = NSTextField(labelWithString: "7d: --")
-    private let resetLabel = NSTextField(labelWithString: "重置: --")
-    private let freshnessLabel = NSTextField(labelWithString: "最新日志: --")
-    private let planLabel = NSTextField(labelWithString: "套餐: --")
+    private let codexSummaryView = ProductSummaryView(title: "Codex")
+    private let claudeSummaryView = ProductSummaryView(title: "Claude")
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -199,106 +205,77 @@ private final class WidgetContentView: NSView {
         self
     }
 
-    func render(snapshot: QuotaSnapshot?) {
+    func render(state: FloatingQuotaState) {
         layer?.backgroundColor = WidgetColors.backgroundColor.cgColor
 
-        if let snapshot {
+        let showCodex = state.isCodexRunning || state.codexSnapshot != nil
+        let showClaude = state.isClaudeDesktopRunning || state.claudeSnapshot != nil
+
+        codexSummaryView.isHidden = !showCodex
+        claudeSummaryView.isHidden = !showClaude
+
+        if let snapshot = state.codexSnapshot {
             let windows = normalizedWindows(from: snapshot)
             let fiveHour = windows.fiveHour
             let sevenDay = windows.sevenDay
 
-            primarySummaryView.render(
-                label: "5h",
-                remainingPercent: fiveHour.map { Int($0.remainingPercent.rounded()) },
-                color: WidgetColors.color(for: fiveHour?.remainingPercent)
+            codexSummaryView.render(
+                firstPercent: fiveHour.map { Int($0.remainingPercent.rounded()) },
+                firstColor: WidgetColors.color(for: fiveHour?.remainingPercent),
+                secondPercent: sevenDay.map { Int($0.remainingPercent.rounded()) },
+                secondColor: WidgetColors.color(for: sevenDay?.remainingPercent)
             )
-            primarySummaryView.toolTip = fiveHour.map {
-                "5h: 剩余 \(Int($0.remainingPercent.rounded()))%"
-            } ?? "5h: 当前日志未提供"
-
-            secondarySummaryView.render(
-                label: "7d",
-                remainingPercent: sevenDay.map { Int($0.remainingPercent.rounded()) },
-                color: WidgetColors.color(for: sevenDay?.remainingPercent)
-            )
-            secondarySummaryView.toolTip = sevenDay.map {
-                "7d: 剩余 \(Int($0.remainingPercent.rounded()))%"
-            } ?? "7d: 当前日志未提供"
-
-            if let fiveHour {
-                fiveHourLabel.stringValue = "5h: 剩余 \(Int(fiveHour.remainingPercent.rounded()))% · 已用 \(Int(fiveHour.usedPercent.rounded()))%"
-            } else {
-                fiveHourLabel.stringValue = "5h: 当前日志未提供"
-            }
-
-            if let sevenDay {
-                sevenDayLabel.stringValue = "7d: 剩余 \(Int(sevenDay.remainingPercent.rounded()))% · 已用 \(Int(sevenDay.usedPercent.rounded()))%"
-            } else {
-                sevenDayLabel.stringValue = "7d: 当前日志未提供"
-            }
-
-            let fiveHourReset = WidgetFormatter.timeUntilReset(fiveHour?.resetsAt)
-            let sevenDayReset = WidgetFormatter.timeUntilReset(sevenDay?.resetsAt)
-            resetLabel.stringValue = "重置: 5h \(fiveHourReset) · 7d \(sevenDayReset)"
-            freshnessLabel.stringValue = "最新日志: \(snapshot.sourceFileName) · \(WidgetFormatter.relativeAge(snapshot.eventTimestamp))"
-            planLabel.stringValue = "套餐: \(snapshot.planType ?? "unknown")"
+            codexSummaryView.toolTip = "Codex: \(percentText(fiveHour?.remainingPercent)) \(percentText(sevenDay?.remainingPercent))"
         } else {
-            primarySummaryView.render(label: "5h", remainingPercent: nil, color: WidgetColors.mutedColor)
-            secondarySummaryView.render(label: "7d", remainingPercent: nil, color: WidgetColors.mutedColor)
-            fiveHourLabel.stringValue = "5h: 等 Codex 写入额度数据"
-            sevenDayLabel.stringValue = "7d: 等 Codex 写入额度数据"
-            resetLabel.stringValue = "重置: --"
-            freshnessLabel.stringValue = "最新日志: 暂无"
-            planLabel.stringValue = "套餐: --"
+            codexSummaryView.render(
+                firstPercent: nil,
+                firstColor: WidgetColors.mutedColor,
+                secondPercent: nil,
+                secondColor: WidgetColors.mutedColor
+            )
+            codexSummaryView.toolTip = state.isCodexRunning ? "Codex: 等待额度数据" : "Codex: 未运行"
         }
-    }
 
-    func setExpanded(_ expanded: Bool) {
-        detailStack.isHidden = !expanded
+        if let snapshot = state.claudeSnapshot {
+            let fiveHourRemaining = remainingPercent(fromUsed: snapshot.fiveHour.usedPercent)
+            let sevenDayRemaining = remainingPercent(fromUsed: snapshot.sevenDay.usedPercent)
+            claudeSummaryView.render(
+                firstPercent: fiveHourRemaining.map { Int($0.rounded()) },
+                firstColor: WidgetColors.color(for: fiveHourRemaining),
+                secondPercent: sevenDayRemaining.map { Int($0.rounded()) },
+                secondColor: WidgetColors.color(for: sevenDayRemaining)
+            )
+            claudeSummaryView.toolTip = "Claude: \(percentText(fiveHourRemaining)) \(percentText(sevenDayRemaining))"
+        } else {
+            claudeSummaryView.render(
+                firstPercent: nil,
+                firstColor: WidgetColors.mutedColor,
+                secondPercent: nil,
+                secondColor: WidgetColors.mutedColor
+            )
+            claudeSummaryView.toolTip = state.isClaudeDesktopRunning ? "Claude: 暂无限额数据" : "Claude: 未运行"
+        }
     }
 
     private func setupViews() {
-        let container = NSStackView()
-        container.orientation = .vertical
-        container.alignment = .centerX
-        container.spacing = 7
-        container.translatesAutoresizingMaskIntoConstraints = false
-
-        summaryStack.orientation = .horizontal
-        summaryStack.alignment = .centerY
-        summaryStack.distribution = .fillEqually
-        summaryStack.spacing = 8
+        summaryStack.orientation = .vertical
+        summaryStack.alignment = .leading
+        summaryStack.distribution = .equalSpacing
+        summaryStack.spacing = 4
         summaryStack.translatesAutoresizingMaskIntoConstraints = false
-        summaryStack.addArrangedSubview(primarySummaryView)
-        summaryStack.addArrangedSubview(secondarySummaryView)
-        primarySummaryView.translatesAutoresizingMaskIntoConstraints = false
-        secondarySummaryView.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            primarySummaryView.widthAnchor.constraint(equalToConstant: 60),
-            secondarySummaryView.widthAnchor.constraint(equalToConstant: 60),
-        ])
-
-        [fiveHourLabel, sevenDayLabel, resetLabel, freshnessLabel, planLabel].forEach { label in
-            label.font = .systemFont(ofSize: 11, weight: .regular)
-            label.textColor = NSColor.white.withAlphaComponent(0.9)
-            label.lineBreakMode = .byTruncatingTail
-            detailStack.addArrangedSubview(label)
+        [codexSummaryView, claudeSummaryView].forEach { view in
+            view.translatesAutoresizingMaskIntoConstraints = false
+            summaryStack.addArrangedSubview(view)
+            view.widthAnchor.constraint(equalToConstant: 136).isActive = true
+            view.heightAnchor.constraint(equalToConstant: 20).isActive = true
         }
-        detailStack.orientation = .vertical
-        detailStack.alignment = .leading
-        detailStack.spacing = 4
-        detailStack.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 2)
-        detailStack.isHidden = true
 
-        container.addArrangedSubview(summaryStack)
-        container.addArrangedSubview(detailStack)
-        addSubview(container)
+        addSubview(summaryStack)
 
         NSLayoutConstraint.activate([
-            container.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            container.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
-            container.topAnchor.constraint(equalTo: topAnchor, constant: 6),
-            container.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
+            summaryStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            summaryStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8),
+            summaryStack.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
 
@@ -327,7 +304,7 @@ private final class WidgetContentView: NSView {
             return
         }
 
-        onToggleExpanded?()
+        onOpenDashboard?()
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -346,15 +323,9 @@ private final class WidgetContentView: NSView {
 
     private func showContextMenu(with event: NSEvent) {
         let menu = NSMenu()
-        let expanded = !detailStack.isHidden
-
-        let toggleItem = NSMenuItem(
-            title: expanded ? "收起详情" : "展开详情",
-            action: #selector(handleContextToggle),
-            keyEquivalent: ""
-        )
-        toggleItem.target = self
-        menu.addItem(toggleItem)
+        let dashboardItem = NSMenuItem(title: "打开额度看板", action: #selector(handleContextOpenDashboard), keyEquivalent: "")
+        dashboardItem.target = self
+        menu.addItem(dashboardItem)
 
         let refreshItem = NSMenuItem(
             title: "立即更新",
@@ -394,8 +365,8 @@ private final class WidgetContentView: NSView {
     }
 
     @objc
-    private func handleContextToggle() {
-        onToggleExpanded?()
+    private func handleContextOpenDashboard() {
+        onOpenDashboard?()
     }
 
     @objc
@@ -424,6 +395,15 @@ private final class WidgetContentView: NSView {
         let sevenDay = windows.first { $0.label == "7d" }
         return (fiveHour, sevenDay)
     }
+
+    private func percentText(_ value: Double?) -> String {
+        guard let value else { return "--%" }
+        return "\(Int(value.rounded()))%"
+    }
+
+    private func remainingPercent(fromUsed usedPercent: Double?) -> Double? {
+        usedPercent.map { min(max(100 - $0, 0), 100) }
+    }
 }
 
 enum WidgetColors {
@@ -441,17 +421,20 @@ enum WidgetColors {
             return NSColor(calibratedRed: 0.96, green: 0.4, blue: 0.36, alpha: 1)
         }
     }
+
 }
 
-private final class SummaryQuotaView: NSView {
-    private let colorDot = DotView()
-    private let valueLabel = NSTextField(labelWithString: "--")
+private final class ProductSummaryView: NSView {
+    private let titleLabel = NSTextField(labelWithString: "")
+    private let firstMetricView = MiniMetricView()
+    private let secondMetricView = MiniMetricView()
 
     init(title: String) {
         super.init(frame: .zero)
+        titleLabel.stringValue = title
         wantsLayer = false
         setupViews()
-        render(label: title, remainingPercent: nil, color: WidgetColors.mutedColor)
+        render(firstPercent: nil, firstColor: WidgetColors.mutedColor, secondPercent: nil, secondColor: WidgetColors.mutedColor)
     }
 
     @available(*, unavailable)
@@ -459,29 +442,67 @@ private final class SummaryQuotaView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func render(label: String, remainingPercent: Int?, color: NSColor) {
-        colorDot.fillColor = color
-        let percentText: String
-        if let remainingPercent {
-            percentText = String(format: "%3d%%", remainingPercent)
-        } else {
-            percentText = " --%"
-        }
-        valueLabel.stringValue = "\(label) \(percentText)"
+    func render(firstPercent: Int?, firstColor: NSColor, secondPercent: Int?, secondColor: NSColor) {
+        firstMetricView.render(percent: firstPercent, color: firstColor)
+        secondMetricView.render(percent: secondPercent, color: secondColor)
     }
 
     private func setupViews() {
         let stack = NSStackView()
         stack.orientation = .horizontal
         stack.alignment = .centerY
-        stack.spacing = 5
+        stack.spacing = 6
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        titleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        titleLabel.textColor = .white.withAlphaComponent(0.94)
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        stack.addArrangedSubview(titleLabel)
+        stack.addArrangedSubview(firstMetricView)
+        stack.addArrangedSubview(secondMetricView)
+        addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            titleLabel.widthAnchor.constraint(equalToConstant: 44),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+        ])
+    }
+}
+
+private final class MiniMetricView: NSView {
+    private let colorDot = DotView()
+    private let valueLabel = NSTextField(labelWithString: "--%")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupViews()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func render(percent: Int?, color: NSColor) {
+        colorDot.fillColor = color
+        valueLabel.stringValue = percent.map { "\($0)%" } ?? "--%"
+    }
+
+    private func setupViews() {
+        let stack = NSStackView()
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         valueLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
         valueLabel.textColor = .white
-        valueLabel.alignment = .center
+        valueLabel.alignment = .left
         valueLabel.lineBreakMode = .byClipping
-        valueLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         stack.addArrangedSubview(colorDot)
         stack.addArrangedSubview(valueLabel)
@@ -490,10 +511,11 @@ private final class SummaryQuotaView: NSView {
         NSLayoutConstraint.activate([
             colorDot.widthAnchor.constraint(equalToConstant: 6),
             colorDot.heightAnchor.constraint(equalToConstant: 6),
-            stack.centerXAnchor.constraint(equalTo: centerXAnchor),
+            valueLabel.widthAnchor.constraint(equalToConstant: 30),
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
-            stack.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+            widthAnchor.constraint(equalToConstant: 40),
         ])
     }
 }
