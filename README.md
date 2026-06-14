@@ -1,7 +1,11 @@
 # Codex Quota Widget
 
-> A tiny macOS helper that keeps your Codex quota visible before quota anxiety kicks in.  
-> 主功能是桌面悬浮胶囊；Touch Bar 是给老款 MacBook Pro 用户的增强显示。
+> A native macOS menu bar app for tracking Codex and Claude Code quota before quota anxiety kicks in.
+> 以菜单栏额度看板和桌面悬浮胶囊为核心，同时显示 Codex 与 Claude Code 的 5 小时 / 7 天剩余额度。
+
+![Codex Quota Widget poster](assets/codex-quota-widget-poster.png)
+
+Floating capsule preview:
 
 ![Codex Quota Widget floating capsule mockup](assets/capsule-ui.svg)
 
@@ -15,22 +19,24 @@ Chinese UI preview:
 
 ## What It Does
 
-Codex Quota Widget shows your Codex 5-hour quota and weekly quota in a floating desktop capsule. If your Mac has a Touch Bar, it can also mirror the same quota as a segmented bar.
+Codex Quota Widget shows your Codex and Claude Code 5-hour / 7-day quota in a compact macOS menu bar dashboard. It also includes an optional floating desktop capsule for always-visible quota awareness.
 
-- Main display: a floating desktop capsule that stays visible while Codex is running.
-- Optional display: a Touch Bar view with segmented quota bars, remaining percentages, reset times, and countdowns.
-- Click the capsule to open a compact detail panel with reset times, data freshness, and plan information.
+- Menu bar dashboard: Codex and Claude Code cards with running status, remaining percentages, progress bars, reset times, and data freshness.
+- Floating capsule: a small always-on-top desktop view that can show whichever product is currently active.
+- Claude controls: manual refresh plus conservative 1h / 2h / 4h auto-refresh windows.
+- Optional Touch Bar view: segmented quota bars, remaining percentages, reset times, and countdowns for Touch Bar MacBook Pro models.
 
-It is built for people who use Codex heavily and want the same kind of ambient awareness as a download speed widget or battery meter: glance once, keep working.
+It is built for people who use Codex and Claude Code heavily and want ambient quota awareness: glance once, keep working.
 
 ## 它解决什么问题
 
-Codex 的剩余额度通常藏得比较深，需要点进本地模式里的额度状态才能看到。这个小工具的主功能是桌面悬浮胶囊，所以没有 Touch Bar 的 Mac 也能正常使用：
+Codex 和 Claude Code 的剩余额度通常分散在不同入口里，不适合高频工作时反复点开查看。这个小工具把关键额度统一放到 macOS 菜单栏里：
 
-- 桌面悬浮胶囊：一直在屏幕边缘显示，不占菜单栏。
-- Touch Bar 展示条：如果你的 Mac 有 Touch Bar，可以像电量条一样显示 `5h` 和 `7D`。
-- 只在 Codex 运行时出现，Codex 退出后自动隐藏。
-- 点击桌面胶囊可以展开详情，查看额度重置时间、数据更新时间和套餐信息。
+- 菜单栏额度看板：同时显示 Codex 与 Claude Code 的 5 小时 / 7 天剩余额度。
+- 桌面悬浮胶囊：可在屏幕边缘显示精简额度，不需要展开面板。
+- 运行状态提示：Codex / Claude Code 是否运行会直接显示在对应卡片里。
+- Claude 刷新控制：支持手动刷新，也支持 1h / 2h / 4h 限时自动刷新。
+- Touch Bar 展示条：如果你的 Mac 有 Touch Bar，可以像电量条一样显示额度状态。
 
 ## Highlights
 

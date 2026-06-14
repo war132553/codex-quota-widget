@@ -1,0 +1,116 @@
+<svg width="1600" height="2000" viewBox="0 0 1600 2000" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Codex Quota Widget product poster</title>
+  <desc id="desc">A promotional poster for Codex Quota Widget, showing a real macOS quota dashboard screenshot.</desc>
+  <defs>
+    <linearGradient id="bg" x1="178" y1="0" x2="1430" y2="2000" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10141D"/>
+      <stop offset="0.52" stop-color="#171D29"/>
+      <stop offset="1" stop-color="#0B0F16"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="318" y1="520" x2="1330" y2="1448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#232A38"/>
+      <stop offset="1" stop-color="#151A24"/>
+    </linearGradient>
+    <linearGradient id="purple" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#D22CE7"/>
+      <stop offset="1" stop-color="#8C5DFF"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#61E39A"/>
+      <stop offset="1" stop-color="#2FBAD3"/>
+    </linearGradient>
+    <filter id="shadow" x="-12%" y="-12%" width="124%" height="124%">
+      <feDropShadow dx="0" dy="36" stdDeviation="38" flood-color="#000000" flood-opacity="0.42"/>
+    </filter>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000000" flood-opacity="0.32"/>
+    </filter>
+    <style>
+      .sans { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+      .mono { font-family: "SF Mono", "Menlo", "Consolas", monospace; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="2000" fill="url(#bg)"/>
+  <circle cx="1330" cy="214" r="330" fill="#B83AF0" opacity="0.16"/>
+  <circle cx="256" cy="1580" r="360" fill="#2FBAD3" opacity="0.12"/>
+  <path d="M126 410H1474" stroke="#FFFFFF" stroke-opacity="0.06"/>
+  <path d="M126 1580H1474" stroke="#FFFFFF" stroke-opacity="0.06"/>
+
+  <g class="sans">
+    <text x="128" y="164" fill="#9FA9BA" font-size="28" font-weight="700" letter-spacing="4">macOS MENU BAR APP</text>
+    <text x="128" y="274" fill="#F7F8FA" font-size="88" font-weight="800">Codex Quota Widget</text>
+    <text x="130" y="348" fill="#C7CFDC" font-size="36" font-weight="500">Codex 与 Claude Code 的剩余额度，一眼看清。</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="164" y="492" width="1272" height="880" rx="52" fill="url(#panel)" stroke="#FFFFFF" stroke-opacity="0.1" stroke-width="2"/>
+    <g class="sans" transform="translate(246 600)">
+      <text x="0" y="0" fill="#F7F8FA" font-size="48" font-weight="800">真实额度看板</text>
+      <text x="0" y="56" fill="#AEB7C7" font-size="28" font-weight="600">来自当前实际截图，完整展示看板弹层。</text>
+
+      <g transform="translate(0 132)">
+        <rect width="460" height="118" rx="26" fill="#151B25" stroke="#FFFFFF" stroke-opacity="0.08"/>
+        <circle cx="38" cy="58" r="10" fill="#54E37C"/>
+        <text x="68" y="50" fill="#FFFFFF" font-size="28" font-weight="800">Codex + Claude</text>
+        <text x="68" y="86" fill="#AAB4C4" font-size="22" font-weight="600">同屏查看 5 小时与 7 天剩余额度</text>
+      </g>
+
+      <g transform="translate(0 278)">
+        <rect width="460" height="118" rx="26" fill="#151B25" stroke="#FFFFFF" stroke-opacity="0.08"/>
+        <circle cx="38" cy="58" r="10" fill="#FF9F0A"/>
+        <text x="68" y="50" fill="#FFFFFF" font-size="28" font-weight="800">重置时间可见</text>
+        <text x="68" y="86" fill="#AAB4C4" font-size="22" font-weight="600">剩余百分比、进度条、重置倒计时</text>
+      </g>
+
+      <g transform="translate(0 424)">
+        <rect width="460" height="118" rx="26" fill="#151B25" stroke="#FFFFFF" stroke-opacity="0.08"/>
+        <circle cx="38" cy="58" r="10" fill="#D22CE7"/>
+        <text x="68" y="50" fill="#FFFFFF" font-size="28" font-weight="800">刷新策略可控</text>
+        <text x="68" y="86" fill="#AAB4C4" font-size="22" font-weight="600">手动刷新，或 1h / 2h / 4h 限时自动刷新</text>
+      </g>
+    </g>
+
+    <g transform="translate(846 548)">
+      <rect x="-18" y="-18" width="536" height="780" rx="52" fill="#080B10" opacity="0.72"/>
+      <image href="product-screenshot-dashboard-clean.png" x="0" y="0" width="500" height="741" preserveAspectRatio="xMidYMid meet"/>
+    </g>
+  </g>
+
+  <g class="sans" transform="translate(128 1472)">
+    <text x="0" y="0" fill="#F7F8FA" font-size="46" font-weight="800">为什么需要它</text>
+    <g transform="translate(0 72)">
+      <rect width="390" height="180" rx="28" fill="#151B25" stroke="#FFFFFF" stroke-opacity="0.08"/>
+      <text x="32" y="58" fill="#FFFFFF" font-size="28" font-weight="800">双额度统一口径</text>
+      <text x="32" y="106" fill="#AEB7C7" font-size="22" font-weight="600">Codex / Claude 都显示</text>
+      <text x="32" y="142" fill="#AEB7C7" font-size="22" font-weight="600">“还剩多少”</text>
+    </g>
+    <g transform="translate(430 72)">
+      <rect width="390" height="180" rx="28" fill="#151B25" stroke="#FFFFFF" stroke-opacity="0.08"/>
+      <text x="32" y="58" fill="#FFFFFF" font-size="28" font-weight="800">刷新节奏可控</text>
+      <text x="32" y="106" fill="#AEB7C7" font-size="22" font-weight="600">手动刷新或限时自动刷新</text>
+      <text x="32" y="142" fill="#AEB7C7" font-size="22" font-weight="600">默认关闭，避免无意义请求</text>
+    </g>
+    <g transform="translate(860 72)">
+      <rect width="390" height="180" rx="28" fill="#151B25" stroke="#FFFFFF" stroke-opacity="0.08"/>
+      <text x="32" y="58" fill="#FFFFFF" font-size="28" font-weight="800">安全边界清楚</text>
+      <text x="32" y="106" fill="#AEB7C7" font-size="22" font-weight="600">不读浏览器 Cookie</text>
+      <text x="32" y="142" fill="#AEB7C7" font-size="22" font-weight="600">不打开网页，不解析正文</text>
+    </g>
+  </g>
+
+  <g filter="url(#softShadow)" transform="translate(1040 296)">
+    <rect width="332" height="116" rx="40" fill="#111722" stroke="#FFFFFF" stroke-opacity="0.12"/>
+    <g class="sans" transform="translate(28 27)">
+      <circle cx="10" cy="14" r="7" fill="#54E37C"/>
+      <text x="28" y="23" fill="#F6F8FB" font-size="24" font-weight="800">Codex 92% 81%</text>
+      <circle cx="10" cy="64" r="7" fill="#54E37C"/>
+      <text x="28" y="73" fill="#F6F8FB" font-size="24" font-weight="800">Claude 97% 79%</text>
+    </g>
+  </g>
+
+  <g class="sans">
+    <text x="128" y="1888" fill="#7F8A9D" font-size="24" font-weight="600">Native Swift + AppKit · Menu bar dashboard · Floating capsule · Local-first quota awareness</text>
+    <text x="128" y="1932" fill="#AEB7C7" font-size="26" font-weight="800">适合高频使用 Codex / Claude Code 的 macOS 工作流。</text>
+  </g>
+</svg>
